@@ -1,0 +1,73 @@
+# ---------------------------------------------------------------------------
+# Delphi / RAD Studio
+# ---------------------------------------------------------------------------
+
+# IDE backup / recovery
+__history/
+__recovery/
+*.~*
+*.dsk
+*.stat
+
+# Machine-local / per-user project state (duplicated info, not portable)
+*.local
+*.identcache
+*.projdata
+*.tvsconfig
+*.delphilsp.json
+*.deployproj
+*.cfg
+
+# Resource compiler temp files (RCa12345 / RDa12345)
+RCa[0-9]*
+RDa[0-9]*
+
+# Compiler / linker output
+*.dcu
+*.dcp
+*.bpl
+*.bpi
+*.dres
+*.drc
+*.map
+*.rsm
+*.tds
+*.pdb
+*.lib
+*.a
+*.o
+*.ocx
+*.obj
+
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.apk
+*.aab
+*.ipa
+
+# Default output directories
+bin/
+dcu/
+Win32/
+Win64/
+Android/
+Android64/
+iOSDevice64/
+iOSSimulator*/
+OSX64/
+OSXARM64/
+Linux64/
+
+# ---------------------------------------------------------------------------
+# Editors / OS
+# ---------------------------------------------------------------------------
+.vscode/
+*.swp
+*~
+Thumbs.db
+desktop.ini
+Desktop.ini
+.DS_Store

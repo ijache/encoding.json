@@ -1,0 +1,90 @@
+name: CI
+
+# There is no Delphi on GitHub-hosted runners, and no Delphi image anyone may
+# legally redistribute, so the compile-and-test job cannot run on hosted
+# infrastructure. It targets a self-hosted runner instead, and stays inert until
+# you register one and set the repository variable HAVE_DELPHI_RUNNER to "true"
+# (Settings -> Secrets and variables -> Actions -> Variables).
+#
+# The hygiene job needs no compiler and runs everywhere. It guards the file-level
+# traps that have already cost time on this project. The byte checks count
+# bytes with tr rather than matching with grep, because grep -P and grep -U are
+# not portable and a check that silently cannot fail is worse than no check at
+# all.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  hygiene:
+    name: Source hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: encoding.json.pas is UTF-8 with a BOM
+        run: |
+          bom=$(head -c 3 source/encoding.json.pas | od -An -tx1 | tr -d ' \n')
+          if [ "$bom" != "efbbbf" ]; then
+            echo "::error file=source/encoding.json.pas::BOM (EF BB BF) missing - got $bom"
+            exit 1
+          fi
+
+      - name: The unit has no CR and is ASCII apart from the BOM
+        run: |
+          body=$(mktemp)
+          tail -c +4 source/encoding.json.pas > "$body"
+
+          cr=$(LC_ALL=C tr -dc '\r' < "$body" | wc -c)
+          if [ "$cr" -ne 0 ]; then
+            echo "::error file=source/encoding.json.pas::$cr CR byte(s) - the working tree form is LF"
+            exit 1
+          fi
+
+          high=$(LC_ALL=C tr -d '\000-\177' < "$body" | wc -c)
+          if [ "$high" -ne 0 ]; then
+            echo "::error file=source/encoding.json.pas::$high non-ASCII byte(s) outside the BOM"
+            exit 1
+          fi
+
+      - name: No NUL bytes in any Pascal source
+        # a raw #0 makes git treat the file as binary and breaks the Delphi lexer
+        run: |
+          fail=0
+          while IFS= read -r f; do
+            n=$(LC_ALL=C tr -dc '\000' < "$f" | wc -c)
+            if [ "$n" -ne 0 ]; then
+              echo "::error file=$f::contains $n NUL byte(s)"
+              fail=1
+            fi
+          done < <(find source dunitx \( -name '*.pas' -o -name '*.dpr' \) -type f)
+          exit $fail
+
+      - name: JSON_VERSION is present and well-formed
+        run: |
+          grep -qE "JSON_VERSION = '[0-9]+\.[0-9]+\.[0-9]+';" source/encoding.json.pas \
+            || { echo "::error file=source/encoding.json.pas::JSON_VERSION missing or not x.y.z"; exit 1; }
+
+  build-and-test:
+    name: Build and test (Delphi 12, Win32 and Win64)
+    needs: hygiene
+    if: ${{ vars.HAVE_DELPHI_RUNNER == 'true' }}
+    runs-on: [self-hosted, windows, delphi12]
+    defaults:
+      run:
+        shell: cmd
+    env:
+      BDS: C:\Program Files (x86)\Embarcadero\Studio\23.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile and run the suite on Win32 and Win64
+        # the same script a developer runs. It compiles with -DCI, which trips
+        # the {$IFNDEF CI} in Tests.dpr so nothing waits for <Enter>; runs each
+        # Tests.exe from its own output directory, or the JSONTestSuite corpus
+        # paths (..\..\..\testdata\...) do not resolve and the conformance cases
+        # pass vacuously; and exits non-zero unless both platforms pass.
+        run: runtests.bat
